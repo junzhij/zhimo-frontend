@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Card,
   Button,
@@ -25,7 +25,7 @@ import {
 import mermaid from 'mermaid';
 import { aiAPI, type MindMapConfig } from '../api/ai';
 
-const { Title, Text, Paragraph } = Typography;
+const { Title, Text } = Typography;
 const { Option } = Select;
 
 interface MindMapData {

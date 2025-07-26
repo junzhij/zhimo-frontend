@@ -1,13 +1,12 @@
-import React, { useState, useEffect } from 'react';
-import { Layout, Menu, Avatar, Dropdown, Button, Space, Typography, Divider } from 'antd';
+import { useState, useEffect } from 'react';
+import { Layout, Avatar, Dropdown, Button, Space, Typography } from 'antd';
 import { 
   UserOutlined, 
   LogoutOutlined, 
   MenuFoldOutlined, 
   MenuUnfoldOutlined,
   FileTextOutlined,
-  RobotOutlined,
-  HomeOutlined
+  RobotOutlined
 } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
 import type { MenuProps } from 'antd';

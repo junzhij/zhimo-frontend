@@ -1,34 +1,32 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   Typography,
   Spin,
   Empty,
-  Button,
-  Space,
   Tag,
-  Divider,
-  Tooltip,
-  Progress,
   message,
   Tabs,
   List,
-  Badge
+  Space,
+  Divider,
+  Badge,
+  Tooltip,
+  Button
 } from 'antd';
 import {
-  FileTextOutlined,
-  DownloadOutlined,
-  EyeOutlined,
-  ShareAltOutlined,
-  PrinterOutlined,
-  FullscreenOutlined,
-  ZoomInOutlined,
-  ZoomOutOutlined,
   BulbOutlined,
   BookOutlined,
-  TagsOutlined
+  TagsOutlined,
+  FileTextOutlined,
+  ZoomOutOutlined,
+  ZoomInOutlined,
+  FullscreenOutlined,
+  DownloadOutlined,
+  ShareAltOutlined,
+  PrinterOutlined
 } from '@ant-design/icons';
-import { documentsAPI, type Document, type RestructureResponse, type SummaryResponse, type ConceptsResponse, type Summary, type Concept } from '../api/documents';
+import { documentsAPI, type Document, type Summary, type Concept } from '../api/documents';
 
 const { Title, Paragraph, Text } = Typography;
 
@@ -40,8 +38,7 @@ interface DocumentViewerProps {
 }
 
 const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = false }) => {
-  const [content, setContent] = useState<string>('');
-  const [contentLoading, setContentLoading] = useState(false);
+
   const [zoom, setZoom] = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
@@ -245,18 +242,10 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
   // 加载文档内容
   useEffect(() => {
     if (document) {
-      setContentLoading(true);
-      // 模拟加载延迟
-      setTimeout(() => {
-        setContent(mockContent);
-        setContentLoading(false);
-      }, 800);
-      
       // 总是尝试加载AI数据，不管AI分析是否完成
       // 这样可以获取最新的处理状态或已有的结果
       loadAIData(document._id);
     } else {
-      setContent('');
       // 重置AI数据
       setRestructuredContent('');
       setSummaries([]);

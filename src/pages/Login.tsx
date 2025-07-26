@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Input, Checkbox, Form, Card, Typography, Alert, Space } from 'antd';
 import { UserOutlined, LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
@@ -25,7 +25,6 @@ const Login: React.FC = () => {
   });
   
   const [formErrors, setFormErrors] = useState<FormErrors>({});
-  const [showPassword, setShowPassword] = useState(false);
 
   // 如果已经登录，重定向到主页
   useEffect(() => {

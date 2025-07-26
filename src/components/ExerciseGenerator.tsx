@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Card,
   Button,
@@ -22,8 +22,7 @@ import {
   SettingOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ReloadOutlined,
-  DownloadOutlined
+  ReloadOutlined
 } from '@ant-design/icons';
 import { aiAPI, type ExerciseConfig, type Exercise } from '../api/ai';
 

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { 
   Card, 
   Upload, 
@@ -6,10 +6,8 @@ import {
   List, 
   Input, 
   Tag, 
-  Space, 
   Typography, 
   message, 
-  Progress,
   Empty,
   Spin,
   Badge
@@ -18,11 +16,7 @@ import {
   UploadOutlined, 
   FileTextOutlined, 
   SearchOutlined,
-  InboxOutlined,
-  EyeOutlined,
-  DeleteOutlined,
-  ReloadOutlined,
-  DownloadOutlined
+  InboxOutlined
 } from '@ant-design/icons';
 import type { UploadProps, UploadFile } from 'antd';
 import { documentsAPI } from '../api/documents';

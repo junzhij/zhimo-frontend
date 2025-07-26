@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { Button, Input, Form, Card, Typography, Alert, Space, Progress } from 'antd';
 import { UserOutlined, MailOutlined, LockOutlined, EyeInvisibleOutlined, EyeTwoTone } from '@ant-design/icons';
 import { useAuthStore } from '../store/authStore';
-import { validateRegisterForm, hasFormErrors, validationRules } from '../utils/validation';
+import { validateRegisterForm, hasFormErrors } from '../utils/validation';
 import type { FormErrors } from '../types/auth';
 
 const { Title, Text } = Typography;
