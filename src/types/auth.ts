@@ -10,7 +10,7 @@ export interface User {
 }
 
 export interface LoginRequest {
-  email: string;
+  identifier: string; // 可以是邮箱或用户名
   password: string;
 }
 
