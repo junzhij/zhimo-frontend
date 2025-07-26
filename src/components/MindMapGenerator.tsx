@@ -23,15 +23,10 @@ import {
   SaveOutlined
 } from '@ant-design/icons';
 import mermaid from 'mermaid';
+import { aiAPI, type MindMapConfig } from '../api/ai';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
-
-interface MindMapConfig {
-  maxNodes: number;
-  language: 'zh' | 'en';
-  style: 'mindmap' | 'flowchart' | 'graph';
-}
 
 interface MindMapData {
   title: string;
@@ -115,56 +110,7 @@ const MindMapGenerator: React.FC<MindMapGeneratorProps> = ({ selectedDocument })
     }
   }, [mindMapData]);
 
-  // 生成模拟思维导图数据
-  const generateMockMindMap = (config: MindMapConfig): string => {
-    const docTitle = selectedDocument?.title || '文档';
-    
-    if (config.style === 'mindmap') {
-      return `mindmap
-  root((${docTitle}))
-    核心概念
-      基本定义
-      重要特征
-      应用场景
-    技术要点
-      实现方法
-      关键技术
-      最佳实践
-    实际应用
-      案例分析
-      成功经验
-      注意事项
-    发展趋势
-      未来方向
-      技术演进
-      市场前景`;
-    } else if (config.style === 'flowchart') {
-      return `flowchart TD
-    A[${docTitle}] --> B[核心概念]
-    A --> C[技术要点]
-    A --> D[实际应用]
-    A --> E[发展趋势]
-    B --> B1[基本定义]
-    B --> B2[重要特征]
-    C --> C1[实现方法]
-    C --> C2[关键技术]
-    D --> D1[案例分析]
-    D --> D2[成功经验]
-    E --> E1[未来方向]
-    E --> E2[技术演进]`;
-    } else {
-      return `graph TD
-    A["${docTitle}"] --> B["核心概念"]
-    A --> C["技术要点"]
-    A --> D["实际应用"]
-    B --> E["基本定义"]
-    B --> F["重要特征"]
-    C --> G["实现方法"]
-    C --> H["关键技术"]
-    D --> I["案例分析"]
-    D --> J["成功经验"]`;
-    }
-  };
+
 
   // 生成思维导图
   const handleGenerateMindMap = async (config: MindMapConfig) => {
@@ -182,19 +128,16 @@ const MindMapGenerator: React.FC<MindMapGeneratorProps> = ({ selectedDocument })
     setConfigVisible(false);
 
     try {
-      // 模拟API调用延迟
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // 生成模拟数据
-      const mermaidCode = generateMockMindMap(config);
+      // 调用真实API生成思维导图
+      const response = await aiAPI.generateMindMap(selectedDocument._id, config);
       
       const newMindMapData: MindMapData = {
-        title: `${selectedDocument.title} - 思维导图`,
-        mermaid: mermaidCode,
-        saved: true,
-        databaseId: 'mock_' + Date.now(),
-        isValidSyntax: true,
-        options: config,
+        title: response.data.title,
+        mermaid: response.data.mermaid,
+        saved: response.data.saved,
+        databaseId: response.data.databaseId,
+        isValidSyntax: response.data.isValidSyntax,
+        options: response.data.options,
         generatedAt: new Date().toISOString()
       };
       

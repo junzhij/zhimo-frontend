@@ -122,15 +122,32 @@ export const useAuthStore = create<AuthStore>()(
                 isAuthenticated: true,
               });
             } else {
-              // Token无效，清除本地存储
+              // Token无效，清除本地存储并设置未认证状态
               localStorage.removeItem('token');
               localStorage.removeItem('user');
+              set({
+                user: null,
+                token: null,
+                isAuthenticated: false,
+              });
             }
           } catch (error) {
-            // 解析用户信息失败，清除本地存储
+            // 解析用户信息失败，清除本地存储并设置未认证状态
             localStorage.removeItem('token');
             localStorage.removeItem('user');
+            set({
+              user: null,
+              token: null,
+              isAuthenticated: false,
+            });
           }
+        } else {
+          // 没有token或用户信息，确保设置为未认证状态
+          set({
+            user: null,
+            token: null,
+            isAuthenticated: false,
+          });
         }
       },
     }),

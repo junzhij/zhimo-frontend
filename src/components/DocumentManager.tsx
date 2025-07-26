@@ -25,27 +25,12 @@ import {
   DownloadOutlined
 } from '@ant-design/icons';
 import type { UploadProps, UploadFile } from 'antd';
+import { documentsAPI } from '../api/documents';
+import type { Document } from '../api/documents';
 
 const { Search } = Input;
 const { Text, Title } = Typography;
 const { Dragger } = Upload;
-
-interface Document {
-  _id: string;
-  title: string;
-  originalFormat: string;
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  metadata: {
-    originalFileName: string;
-    fileSize: number;
-    mimeType: string;
-    wordCount?: number;
-    pageCount?: number;
-  };
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-}
 
 interface DocumentManagerProps {
   onDocumentSelect?: (document: Document) => void;
@@ -62,80 +47,30 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
   const [searchText, setSearchText] = useState('');
   const [fileList, setFileList] = useState<UploadFile[]>([]);
 
-  // 模拟文档数据
+  // 加载文档数据
   useEffect(() => {
-    const mockDocuments: Document[] = [
-      {
-        _id: '1',
-        title: 'Introduction to AI',
-        originalFormat: 'pdf',
-        processingStatus: 'completed',
-        metadata: {
-          originalFileName: 'intro-ai.pdf',
-          fileSize: 2048000,
-          mimeType: 'application/pdf',
-          wordCount: 1500,
-          pageCount: 10
-        },
-        tags: ['AI', 'Machine Learning'],
-        createdAt: '2024-01-01T00:00:00.000Z',
-        updatedAt: '2024-01-01T00:05:00.000Z'
-      },
-      {
-        _id: '2',
-        title: 'Machine Learning Basics',
-        originalFormat: 'docx',
-        processingStatus: 'processing',
-        metadata: {
-          originalFileName: 'ml-basics.docx',
-          fileSize: 1024000,
-          mimeType: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-          wordCount: 2000
-        },
-        tags: ['Machine Learning', 'Basics'],
-        createdAt: '2024-01-02T00:00:00.000Z',
-        updatedAt: '2024-01-02T00:05:00.000Z'
-      },
-      {
-        _id: '3',
-        title: 'Neural Networks Deep Dive',
-        originalFormat: 'pdf',
-        processingStatus: 'completed',
-        metadata: {
-          originalFileName: 'neural-networks.pdf',
-          fileSize: 3072000,
-          mimeType: 'application/pdf',
-          wordCount: 3500,
-          pageCount: 25
-        },
-        tags: ['Neural Networks', 'Deep Learning'],
-        createdAt: '2024-01-03T00:00:00.000Z',
-        updatedAt: '2024-01-03T00:05:00.000Z'
-      },
-      {
-        _id: '4',
-        title: 'Ethics in AI',
-        originalFormat: 'pdf',
-        processingStatus: 'completed',
-        metadata: {
-          originalFileName: 'ai-ethics.pdf',
-          fileSize: 1536000,
-          mimeType: 'application/pdf',
-          wordCount: 1200,
-          pageCount: 8
-        },
-        tags: ['Ethics', 'AI'],
-        createdAt: '2024-01-04T00:00:00.000Z',
-        updatedAt: '2024-01-04T00:05:00.000Z'
-      }
-    ];
-    setDocuments(mockDocuments);
+    loadDocuments();
   }, []);
 
+  const loadDocuments = async () => {
+    setLoading(true);
+    try {
+      const response = await documentsAPI.getDocuments();
+      setDocuments(response.data.documents || []);
+    } catch (error) {
+      console.error('Failed to load documents:', error);
+      message.error('加载文档失败');
+      // 确保即使API失败也保持空数组
+      setDocuments([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // 过滤文档
-  const filteredDocuments = documents.filter(doc => 
+  const filteredDocuments = (documents || []).filter(doc => 
     doc.title.toLowerCase().includes(searchText.toLowerCase()) ||
-    doc.tags.some(tag => tag.toLowerCase().includes(searchText.toLowerCase()))
+    (doc.tags && doc.tags.toLowerCase().includes(searchText.toLowerCase()))
   );
 
   // 上传配置
@@ -185,29 +120,20 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
 
     setUploading(true);
     try {
-      // 模拟上传过程
-      await new Promise(resolve => setTimeout(resolve, 2000));
+      // 逐个上传文件
+      for (const fileItem of fileList) {
+        if (fileItem.originFileObj) {
+          const title = fileItem.name.replace(/\.[^/.]+$/, '');
+          await documentsAPI.uploadDocument(fileItem.originFileObj, title);
+        }
+      }
       
-      // 模拟添加新文档到列表
-      const newDocuments = fileList.map((file, index) => ({
-        _id: `new_${Date.now()}_${index}`,
-        title: file.name.replace(/\.[^/.]+$/, ''),
-        originalFormat: file.name.split('.').pop() || 'unknown',
-        processingStatus: 'processing' as const,
-        metadata: {
-          originalFileName: file.name,
-          fileSize: file.size || 0,
-          mimeType: file.type || 'unknown'
-        },
-        tags: [],
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString()
-      }));
-      
-      setDocuments(prev => [...newDocuments, ...prev]);
+      // 重新加载文档列表
+      await loadDocuments();
       setFileList([]);
       message.success('文件上传成功！');
     } catch (error) {
+      console.error('Upload failed:', error);
       message.error('上传失败，请重试！');
     } finally {
       setUploading(false);
@@ -339,7 +265,7 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
                   description={
                     <div>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {formatFileSize(doc.metadata.fileSize)} • {formatDate(doc.createdAt)}
+                        {doc.fileSize ? formatFileSize(doc.fileSize) : 'Unknown size'} • {formatDate(doc.uploadedAt)}
                       </Text>
                       {doc.processingStatus === 'processing' && (
                         <Progress 

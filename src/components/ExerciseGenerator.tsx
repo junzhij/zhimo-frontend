@@ -25,29 +25,12 @@ import {
   ReloadOutlined,
   DownloadOutlined
 } from '@ant-design/icons';
+import { aiAPI, type ExerciseConfig, type Exercise } from '../api/ai';
 
 const { Title, Text, Paragraph } = Typography;
 const { Option } = Select;
 
-interface Exercise {
-  id: string;
-  type: 'multiple_choice' | 'true_false' | 'short_answer';
-  question: string;
-  options?: string[];
-  correctAnswer: string;
-  explanation: string;
-  difficulty: number;
-  points: number;
-  userAnswer?: string;
-  isCorrect?: boolean;
-}
 
-interface ExerciseConfig {
-  count: number;
-  types: string[];
-  difficulty: 'easy' | 'medium' | 'hard';
-  language: 'zh' | 'en';
-}
 
 interface ExerciseGeneratorProps {
   selectedDocument?: {
@@ -92,45 +75,7 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
     }
   }, [selectedDocument]);
 
-  // 生成模拟练习题数据
-  const generateMockExercises = (config: ExerciseConfig): Exercise[] => {
-    const mockExercises: Exercise[] = [];
-    
-    for (let i = 0; i < config.count; i++) {
-      if (config.types.includes('multiple_choice')) {
-        mockExercises.push({
-          id: `q${i + 1}`,
-          type: 'multiple_choice',
-          question: `关于《${selectedDocument?.title}》的第${i + 1}个问题：以下哪个选项最准确地描述了文档中的核心概念？`,
-          options: [
-            '选项A：这是第一个可能的答案',
-            '选项B：这是正确的答案选项',
-            '选项C：这是第三个选项',
-            '选项D：这是第四个选项'
-          ],
-          correctAnswer: '选项B：这是正确的答案选项',
-          explanation: '根据文档内容，选项B最准确地反映了核心概念的定义和应用场景。',
-          difficulty: 3,
-          points: 10
-        });
-      }
-      
-      if (config.types.includes('true_false') && i % 2 === 1) {
-        mockExercises.push({
-          id: `q${i + 1}_tf`,
-          type: 'true_false',
-          question: `判断题：文档《${selectedDocument?.title}》中提到的理论在实际应用中具有重要意义。`,
-          options: ['正确', '错误'],
-          correctAnswer: '正确',
-          explanation: '根据文档分析，该理论确实在多个实际场景中得到了成功应用。',
-          difficulty: 2,
-          points: 5
-        });
-      }
-    }
-    
-    return mockExercises.slice(0, config.count);
-  };
+
 
   // 生成练习题
   const handleGenerateExercises = async (config: ExerciseConfig) => {
@@ -148,11 +93,9 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
     setConfigVisible(false);
 
     try {
-      // 模拟API调用延迟
-      await new Promise(resolve => setTimeout(resolve, 2000));
-      
-      // 生成模拟数据
-      const newExercises = generateMockExercises(config);
+      // 调用真实API生成练习题
+      const response = await aiAPI.generateExercises(selectedDocument._id, config);
+      const newExercises = response.data.exercises;
       setExercises(newExercises);
       
       // 保存到localStorage
@@ -164,6 +107,7 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
       setUserAnswers({});
       setShowResults(false);
     } catch (error) {
+      console.error('Generate exercises error:', error);
       message.error('生成练习题失败，请重试');
     } finally {
       setIsGenerating(false);
