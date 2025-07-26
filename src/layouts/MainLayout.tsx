@@ -14,27 +14,12 @@ import type { MenuProps } from 'antd';
 import DocumentManager from '../components/DocumentManager';
 import DocumentViewer from '../components/DocumentViewer';
 import AIToolPanel from '../components/AIToolPanel';
+import type { Document } from '../api/documents';
 
 const { Header, Sider, Content } = Layout;
 const { Title, Text } = Typography;
 
-interface Document {
-  _id: string;
-  title: string;
-  originalFormat: string;
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  metadata: {
-    originalFileName: string;
-    fileSize: number;
-    mimeType: string;
-    wordCount?: number;
-    pageCount?: number;
-  };
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-  content?: string;
-}
+
 
 interface MainLayoutProps {
   children?: React.ReactNode;
@@ -82,10 +67,8 @@ const MainLayout: React.FC<MainLayoutProps> = ({
   const handleDocumentSelect = (document: Document) => {
     setDocumentLoading(true);
     setSelectedDocument(document);
-    // 模拟加载延迟
-    setTimeout(() => {
-      setDocumentLoading(false);
-    }, 500);
+    // 立即设置文档，让DocumentViewer开始加载
+    setDocumentLoading(false);
   };
 
   // 用户下拉菜单

@@ -56,11 +56,12 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
     setLoading(true);
     try {
       const response = await documentsAPI.getDocuments();
-      setDocuments(response.data.documents || []);
+      // 根据新的API响应格式，data直接是文档数组
+      setDocuments(response.data || []);
     } catch (error) {
       console.error('Failed to load documents:', error);
-      message.error('加载文档失败');
-      // 确保即使API失败也保持空数组
+      message.error('加载文档列表失败！');
+      // 确保documents始终是数组，即使API调用失败
       setDocuments([]);
     } finally {
       setLoading(false);
@@ -68,10 +69,16 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
   };
 
   // 过滤文档
-  const filteredDocuments = (documents || []).filter(doc => 
-    doc.title.toLowerCase().includes(searchText.toLowerCase()) ||
-    (doc.tags && doc.tags.toLowerCase().includes(searchText.toLowerCase()))
-  );
+  const filteredDocuments = (documents || []).filter(doc => {
+    const searchLower = searchText.toLowerCase();
+    const titleMatch = doc.title.toLowerCase().includes(searchLower);
+    
+    // 处理tags字段，根据API文档应该是字符串数组
+    const tagsMatch = doc.tags && Array.isArray(doc.tags) ? 
+      doc.tags.some(tag => tag.toLowerCase().includes(searchLower)) : false;
+    
+    return titleMatch || tagsMatch;
+  });
 
   // 上传配置
   const uploadProps: UploadProps = {
@@ -79,19 +86,27 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
     multiple: true,
     fileList,
     beforeUpload: (file) => {
+      // 根据API文档支持的文件格式
       const isValidType = [
+        // PDF
         'application/pdf',
+        // Word
         'application/msword',
         'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+        // PowerPoint
         'application/vnd.ms-powerpoint',
         'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+        // 图片格式
         'image/jpeg',
+        'image/jpg',
         'image/png',
-        'image/gif'
+        'image/gif',
+        'image/bmp',
+        'image/webp'
       ].includes(file.type!);
       
       if (!isValidType) {
-        message.error('只支持 PDF、Word、PPT 和图片格式！');
+        message.error('只支持 PDF、Word (.doc/.docx)、PowerPoint (.ppt/.pptx) 和图片格式 (.jpg/.jpeg/.png/.gif/.bmp/.webp)！');
         return false;
       }
       
@@ -132,25 +147,51 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
       await loadDocuments();
       setFileList([]);
       message.success('文件上传成功！');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Upload failed:', error);
-      message.error('上传失败，请重试！');
+      
+      // 更详细的错误处理
+      let errorMessage = '上传失败，请重试！';
+      if (error.response) {
+        // 服务器响应了错误状态码
+        const status = error.response.status;
+        const data = error.response.data;
+        
+        if (status === 401) {
+          errorMessage = '请先登录后再上传文件！';
+        } else if (status === 413) {
+          errorMessage = '文件太大，请选择小于50MB的文件！';
+        } else if (status === 400) {
+          errorMessage = data?.message || '文件格式不支持或参数错误！';
+        } else if (status >= 500) {
+          errorMessage = '服务器错误，请稍后重试！';
+        } else {
+          errorMessage = data?.message || `上传失败 (${status})`;
+        }
+      } else if (error.request) {
+        // 请求发出但没有收到响应
+        errorMessage = '网络连接失败，请检查网络连接！';
+      } else {
+        // 其他错误
+        errorMessage = error.message || '上传失败，请重试！';
+      }
+      
+      message.error(errorMessage);
     } finally {
       setUploading(false);
     }
   };
 
   // 获取状态标签
-  const getStatusTag = (status: Document['processingStatus']) => {
-    const statusConfig = {
-      pending: { color: 'default', text: '等待处理' },
-      processing: { color: 'processing', text: '处理中' },
-      completed: { color: 'success', text: '已完成' },
-      failed: { color: 'error', text: '处理失败' }
-    };
-    
-    const config = statusConfig[status];
-    return <Tag color={config.color}>{config.text}</Tag>;
+  const getStatusTag = (document: Document) => {
+    const { hasBothSummaryAndConcept } = document;
+    console.log(hasBothSummaryAndConcept);
+    // 根据hasBothSummaryAndConcept字段判断状态
+    if (hasBothSummaryAndConcept) {
+      return <Tag color="success">已完成</Tag>;
+    } else {
+      return <Tag color="processing">处理中</Tag>;
+    }
   };
 
   // 格式化文件大小
@@ -245,9 +286,7 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
                 <List.Item.Meta
                   avatar={
                     <Badge 
-                      status={doc.processingStatus === 'completed' ? 'success' : 
-                             doc.processingStatus === 'processing' ? 'processing' : 
-                             doc.processingStatus === 'failed' ? 'error' : 'default'}
+                      status={doc.hasBothSummaryAndConcept ? 'success' : 'processing'}
                     >
                       <FileTextOutlined style={{ fontSize: '20px', color: '#1890ff' }} />
                     </Badge>
@@ -258,23 +297,24 @@ const DocumentManager: React.FC<DocumentManagerProps> = ({
                         {doc.title}
                       </Text>
                       <div style={{ marginTop: '4px' }}>
-                        {getStatusTag(doc.processingStatus)}
+                        {getStatusTag(doc)}
                       </div>
                     </div>
                   }
                   description={
                     <div>
                       <Text type="secondary" style={{ fontSize: '12px' }}>
-                        {doc.fileSize ? formatFileSize(doc.fileSize) : 'Unknown size'} • {formatDate(doc.uploadedAt)}
+                        {/* 优先使用新数据结构，兼容旧数据结构 */}
+                        {(doc.metadata?.fileSize || doc.fileSize) ? 
+                          formatFileSize(doc.metadata?.fileSize || doc.fileSize!) : 
+                          'Unknown size'
+                        } • {formatDate(
+                          doc.metadata?.uploadedAt || 
+                          doc.uploadedAt || 
+                          doc.createdAt
+                        )}
                       </Text>
-                      {doc.processingStatus === 'processing' && (
-                        <Progress 
-                          percent={Math.floor(Math.random() * 80) + 10} 
-                          size="small" 
-                          style={{ marginTop: '4px' }}
-                          status="active"
-                        />
-                      )}
+
                     </div>
                   }
                 />

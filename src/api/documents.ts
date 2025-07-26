@@ -4,24 +4,31 @@ import api from './auth';
 export interface Document {
   _id: string;
   title: string;
-  content?: string;
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  uploadedAt: string;
+  originalFormat?: string;
+  markdownContent?: string;
+  restructuredContent?: string;
+  hasBothSummaryAndConcept?: boolean; // AI分析完成状态
+  metadata?: {
+    originalFileName: string;
+    fileSize: number;
+    mimeType: string;
+    uploadedAt: string;
+    wordCount?: number;
+    pageCount?: number;
+  };
+  tags?: string[];
+  createdAt: string;
   updatedAt: string;
+  // 兼容旧字段
+  uploadedAt?: string;
   fileSize?: number;
   fileType?: string;
-  tags?: string;
   url?: string;
 }
 
 export interface DocumentListResponse {
   success: boolean;
-  data: {
-    documents: Document[];
-    total: number;
-    page: number;
-    limit: number;
-  };
+  data: Document[]; // 根据API文档，直接返回文档数组
 }
 
 export interface DocumentResponse {
@@ -31,9 +38,55 @@ export interface DocumentResponse {
 
 export interface UploadResponse {
   success: boolean;
+  message: string;
   data: {
     document: Document;
-    message: string;
+    processingStatus: string;
+  };
+}
+
+// AI功能相关的类型定义
+export interface RestructureResponse {
+  success: boolean;
+  data: {
+    originalContent: string;
+    restructuredContent: string;
+    processingStatus: string;
+  };
+}
+
+export interface Summary {
+  id: string;
+  type: 'oneline' | 'detailed' | 'keypoints';
+  content: string;
+  wordCount: number;
+  generatedAt: string;
+  aiModel: string;
+}
+
+export interface SummaryResponse {
+  success: boolean;
+  data: {
+    summaries: Summary[];
+  };
+}
+
+export interface Concept {
+  id: string;
+  term: string;
+  definition: string;
+  category: 'person' | 'place' | 'concept' | 'term' | 'formula' | 'theory';
+  importance: number;
+  occurrenceCount: number;
+  extractionConfidence: number;
+  createdAt: string;
+}
+
+export interface ConceptsResponse {
+  success: boolean;
+  data: {
+    concepts: Concept[];
+    total: number;
   };
 }
 
@@ -66,7 +119,7 @@ export const documentsAPI = {
   // 上传文档
   uploadDocument: async (file: File, title?: string, tags?: string): Promise<UploadResponse> => {
     const formData = new FormData();
-    formData.append('file', file);
+    formData.append('document', file); // 根据API文档，字段名应该是'document'
     if (title) formData.append('title', title);
     if (tags) formData.append('tags', tags);
 
@@ -133,6 +186,39 @@ export const documentsAPI = {
     if (filters?.dateTo) params.append('dateTo', filters.dateTo);
 
     const response = await api.get(`/documents/search?${params.toString()}`);
+    return response.data;
+  },
+
+  // AI功能API
+  // 获取AI重构内容
+  getRestructuredContent: async (documentId: string): Promise<RestructureResponse> => {
+    const response = await api.get(`/documents/${documentId}/ai/restructure`);
+    return response.data;
+  },
+
+  // 获取文档摘要
+  getSummary: async (documentId: string, type?: 'oneline' | 'detailed' | 'keypoints'): Promise<SummaryResponse> => {
+    const params = new URLSearchParams();
+    if (type) params.append('type', type);
+    
+    const url = `/documents/${documentId}/ai/summary${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await api.get(url);
+    return response.data;
+  },
+
+  // 获取提取的概念
+  getConcepts: async (documentId: string, filters?: {
+    category?: 'person' | 'place' | 'concept' | 'term' | 'formula' | 'theory';
+    importance?: number;
+    limit?: number;
+  }): Promise<ConceptsResponse> => {
+    const params = new URLSearchParams();
+    if (filters?.category) params.append('category', filters.category);
+    if (filters?.importance) params.append('importance', filters.importance.toString());
+    if (filters?.limit) params.append('limit', filters.limit.toString());
+    
+    const url = `/documents/${documentId}/ai/concepts${params.toString() ? '?' + params.toString() : ''}`;
+    const response = await api.get(url);
     return response.data;
   }
 };

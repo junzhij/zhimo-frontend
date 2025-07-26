@@ -10,7 +10,10 @@ import {
   Divider,
   Tooltip,
   Progress,
-  message
+  message,
+  Tabs,
+  List,
+  Badge
 } from 'antd';
 import {
   FileTextOutlined,
@@ -20,28 +23,16 @@ import {
   PrinterOutlined,
   FullscreenOutlined,
   ZoomInOutlined,
-  ZoomOutOutlined
+  ZoomOutOutlined,
+  BulbOutlined,
+  BookOutlined,
+  TagsOutlined
 } from '@ant-design/icons';
+import { documentsAPI, type Document, type RestructureResponse, type SummaryResponse, type ConceptsResponse, type Summary, type Concept } from '../api/documents';
 
 const { Title, Paragraph, Text } = Typography;
 
-interface Document {
-  _id: string;
-  title: string;
-  originalFormat: string;
-  processingStatus: 'pending' | 'processing' | 'completed' | 'failed';
-  metadata: {
-    originalFileName: string;
-    fileSize: number;
-    mimeType: string;
-    wordCount?: number;
-    pageCount?: number;
-  };
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-  content?: string;
-}
+
 
 interface DocumentViewerProps {
   document?: Document;
@@ -53,6 +44,21 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
   const [contentLoading, setContentLoading] = useState(false);
   const [zoom, setZoom] = useState(100);
   const [isFullscreen, setIsFullscreen] = useState(false);
+  
+  // AI功能相关状态
+  const [restructuredContent, setRestructuredContent] = useState<string>('');
+  const [summaries, setSummaries] = useState<Summary[]>([]);
+  const [concepts, setConcepts] = useState<Concept[]>([]);
+  const [aiLoading, setAiLoading] = useState({
+    restructure: false,
+    summary: false,
+    concepts: false
+  });
+  const [aiErrors, setAiErrors] = useState({
+    restructure: null as string | null,
+    summary: null as string | null,
+    concepts: null as string | null
+  });
 
   // 模拟文档内容
   const mockContent = `
@@ -172,17 +178,89 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
 *本文档最后更新时间：${new Date().toLocaleDateString('zh-CN')}*
   `;
 
+  // 并行加载AI功能数据
+  const loadAIData = async (documentId: string) => {
+    // 重置错误状态
+    setAiErrors({
+      restructure: null,
+      summary: null,
+      concepts: null
+    });
+
+    // 并行请求所有AI功能
+    const promises = [
+      // 获取重构内容
+      (async () => {
+        setAiLoading(prev => ({ ...prev, restructure: true }));
+        try {
+          const response = await documentsAPI.getRestructuredContent(documentId);
+          if (response.success) {
+            setRestructuredContent(response.data.restructuredContent);
+          }
+        } catch (error) {
+          console.error('Failed to load restructured content:', error);
+          setAiErrors(prev => ({ ...prev, restructure: '加载重构内容失败' }));
+        } finally {
+          setAiLoading(prev => ({ ...prev, restructure: false }));
+        }
+      })(),
+      
+      // 获取摘要
+      (async () => {
+        setAiLoading(prev => ({ ...prev, summary: true }));
+        try {
+          const response = await documentsAPI.getSummary(documentId);
+          if (response.success) {
+            setSummaries(response.data.summaries);
+          }
+        } catch (error) {
+          console.error('Failed to load summaries:', error);
+          setAiErrors(prev => ({ ...prev, summary: '加载摘要失败' }));
+        } finally {
+          setAiLoading(prev => ({ ...prev, summary: false }));
+        }
+      })(),
+      
+      // 获取概念
+      (async () => {
+        setAiLoading(prev => ({ ...prev, concepts: true }));
+        try {
+          const response = await documentsAPI.getConcepts(documentId, { limit: 20 });
+          if (response.success) {
+            setConcepts(response.data.concepts);
+          }
+        } catch (error) {
+          console.error('Failed to load concepts:', error);
+          setAiErrors(prev => ({ ...prev, concepts: '加载概念失败' }));
+        } finally {
+          setAiLoading(prev => ({ ...prev, concepts: false }));
+        }
+      })()
+    ];
+
+    // 等待所有请求完成
+    await Promise.allSettled(promises);
+  };
+
   // 加载文档内容
   useEffect(() => {
-    if (document && document.processingStatus === 'completed') {
+    if (document) {
       setContentLoading(true);
       // 模拟加载延迟
       setTimeout(() => {
         setContent(mockContent);
         setContentLoading(false);
       }, 800);
+      
+      // 总是尝试加载AI数据，不管AI分析是否完成
+      // 这样可以获取最新的处理状态或已有的结果
+      loadAIData(document._id);
     } else {
       setContent('');
+      // 重置AI数据
+      setRestructuredContent('');
+      setSummaries([]);
+      setConcepts([]);
     }
   }, [document, mockContent]);
 
@@ -207,16 +285,12 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
   };
 
   // 获取状态标签
-  const getStatusTag = (status: Document['processingStatus']) => {
-    const statusConfig = {
-      pending: { color: 'default', text: '等待处理' },
-      processing: { color: 'processing', text: '处理中' },
-      completed: { color: 'success', text: '已完成' },
-      failed: { color: 'error', text: '处理失败' }
-    };
-    
-    const config = statusConfig[status];
-    return <Tag color={config.color}>{config.text}</Tag>;
+  const getStatusTag = (document: Document) => {
+    if (document.hasBothSummaryAndConcept) {
+      return <Tag color="success">已完成</Tag>;
+    } else {
+      return <Tag color="processing">处理中</Tag>;
+    }
   };
 
   // 处理操作
@@ -331,6 +405,164 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
     );
   }
 
+  // 渲染AI内容区域
+  const renderAIContent = () => {
+    const { TabPane } = Tabs;
+    
+    return (
+      <Tabs defaultActiveKey="restructure" size="small" style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+        <TabPane 
+          tab={<span><BulbOutlined />重构内容</span>} 
+          key="restructure"
+          style={{ height: '100%', overflow: 'hidden' }}
+        >
+          <div style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
+            {aiLoading.restructure ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px' }}>
+                  <Text type="secondary">正在加载重构内容...</Text>
+                </div>
+              </div>
+            ) : aiErrors.restructure ? (
+              <Empty 
+                description={aiErrors.restructure}
+                image={<BulbOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />}
+              />
+            ) : restructuredContent ? (
+              <div style={{ padding: '16px' }}>
+                {renderContent(restructuredContent)}
+              </div>
+            ) : (
+              <Empty 
+                description="暂无重构内容"
+                image={<BulbOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />}
+              />
+            )}
+          </div>
+        </TabPane>
+        
+        <TabPane 
+          tab={<span><BookOutlined />文档摘要</span>} 
+          key="summary"
+          style={{ height: '100%', overflow: 'hidden' }}
+        >
+          <div style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
+            {aiLoading.summary ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px' }}>
+                  <Text type="secondary">正在生成摘要...</Text>
+                </div>
+              </div>
+            ) : aiErrors.summary ? (
+              <Empty 
+                description={aiErrors.summary}
+                image={<BookOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />}
+              />
+            ) : summaries.length > 0 ? (
+              <List
+                dataSource={summaries}
+                renderItem={(summary) => (
+                  <List.Item key={summary.id}>
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Tag color={summary.type === 'oneline' ? 'blue' : summary.type === 'detailed' ? 'green' : 'orange'}>
+                            {summary.type === 'oneline' ? '一句话摘要' : 
+                             summary.type === 'detailed' ? '详细摘要' : '关键要点'}
+                          </Tag>
+                          <Text type="secondary" style={{ fontSize: '12px' }}>
+                            {summary.wordCount} 字
+                          </Text>
+                        </Space>
+                      }
+                      description={
+                        <Paragraph style={{ marginBottom: 0 }}>
+                          {summary.content}
+                        </Paragraph>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty 
+                description="暂无摘要内容"
+                image={<BookOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />}
+              />
+            )}
+          </div>
+        </TabPane>
+        
+        <TabPane 
+          tab={<span><TagsOutlined />概念提取</span>} 
+          key="concepts"
+          style={{ height: '100%', overflow: 'hidden' }}
+        >
+          <div style={{ height: 'calc(100vh - 200px)', overflow: 'auto' }}>
+            {aiLoading.concepts ? (
+              <div style={{ textAlign: 'center', padding: '40px 0' }}>
+                <Spin size="large" />
+                <div style={{ marginTop: '16px' }}>
+                  <Text type="secondary">正在提取概念...</Text>
+                </div>
+              </div>
+            ) : aiErrors.concepts ? (
+              <Empty 
+                description={aiErrors.concepts}
+                image={<TagsOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />}
+              />
+            ) : concepts.length > 0 ? (
+              <List
+                dataSource={concepts}
+                renderItem={(concept) => (
+                  <List.Item key={concept.id}>
+                    <List.Item.Meta
+                      title={
+                        <Space>
+                          <Text strong>{concept.term}</Text>
+                          <Tag color={concept.category === 'person' ? 'blue' : 
+                                     concept.category === 'place' ? 'green' : 
+                                     concept.category === 'concept' ? 'orange' : 
+                                     concept.category === 'term' ? 'purple' : 
+                                     concept.category === 'formula' ? 'red' : 'cyan'}>
+                            {concept.category === 'person' ? '人物' : 
+                             concept.category === 'place' ? '地点' : 
+                             concept.category === 'concept' ? '概念' : 
+                             concept.category === 'term' ? '术语' : 
+                             concept.category === 'formula' ? '公式' : '理论'}
+                          </Tag>
+                          <Badge count={concept.occurrenceCount} size="small" />
+                        </Space>
+                      }
+                      description={
+                        <div>
+                          <Paragraph style={{ marginBottom: '8px' }}>
+                            {concept.definition}
+                          </Paragraph>
+                          <Space size="small">
+                            <Text type="secondary" style={{ fontSize: '12px' }}>重要度: {concept.importance}/10</Text>
+                            <Text type="secondary" style={{ fontSize: '12px' }}>置信度: {Math.round(concept.extractionConfidence * 100)}%</Text>
+                          </Space>
+                        </div>
+                      }
+                    />
+                  </List.Item>
+                )}
+              />
+            ) : (
+              <Empty 
+                description="暂无提取的概念"
+                image={<TagsOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />}
+              />
+            )}
+          </div>
+        </TabPane>
+      </Tabs>
+    );
+  };
+
   return (
     <div style={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
       {/* 文档头部信息 */}
@@ -342,25 +574,29 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
               <Title level={4} style={{ margin: 0 }}>
                 {document.title}
               </Title>
-              {getStatusTag(document.processingStatus)}
+              {getStatusTag(document)}
             </div>
             
             <Space split={<Divider type="vertical" />} size="small">
               <Text type="secondary" style={{ fontSize: '12px' }}>
-                {formatFileSize(document.metadata.fileSize)}
+                {/* 优先使用新数据结构，兼容旧数据结构 */}
+                {document.metadata?.fileSize ? 
+                  formatFileSize(document.metadata.fileSize) : 
+                  'Unknown size'
+                }
               </Text>
               <Text type="secondary" style={{ fontSize: '12px' }}>
-                {document.metadata.wordCount ? `${document.metadata.wordCount} 字` : ''}
+                {document.metadata?.wordCount ? `${document.metadata.wordCount} 字` : ''}
               </Text>
               <Text type="secondary" style={{ fontSize: '12px' }}>
-                {document.metadata.pageCount ? `${document.metadata.pageCount} 页` : ''}
+                {document.metadata?.pageCount ? `${document.metadata.pageCount} 页` : ''}
               </Text>
               <Text type="secondary" style={{ fontSize: '12px' }}>
                 {formatDate(document.updatedAt)}
               </Text>
             </Space>
             
-            {document.tags.length > 0 && (
+            {document.tags && document.tags.length > 0 && (
               <div style={{ marginTop: '8px' }}>
                 {document.tags.map(tag => (
                   <Tag key={tag}>{tag}</Tag>
@@ -393,18 +629,12 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
           </Space>
         </div>
         
-        {document.processingStatus === 'processing' && (
-          <Progress 
-            percent={Math.floor(Math.random() * 80) + 10} 
-            size="small" 
-            style={{ marginTop: '8px' }}
-            status="active"
-          />
-        )}
+
       </Card>
 
-      {/* 文档内容 */}
+      {/* 主要内容区域 - AI分析结果 */}
       <Card 
+        title="AI分析结果"
         style={{ 
           flex: 1, 
           overflow: 'hidden',
@@ -420,47 +650,18 @@ const DocumentViewer: React.FC<DocumentViewerProps> = ({ document, loading = fal
           } : {})
         }}
       >
-        <div style={{ height: '100%', overflow: 'auto', padding: '16px' }}>
-          {document.processingStatus === 'pending' && (
+        {document ? (
+          renderAIContent()
+        ) : (
+          <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <Empty 
-              description="文档等待处理中"
-              image={<EyeOutlined style={{ fontSize: '48px', color: '#d9d9d9' }} />}
-            />
-          )}
-          
-          {document.processingStatus === 'failed' && (
-            <Empty 
-              description="文档处理失败"
-              image={<FileTextOutlined style={{ fontSize: '48px', color: '#ff4d4f' }} />}
+              description="请选择一个文档"
+              image={<BulbOutlined style={{ fontSize: '64px', color: '#d9d9d9' }} />}
             >
-              <Button type="primary" size="small">重新处理</Button>
+              <Text type="secondary">从左侧选择一个文档来查看AI分析结果</Text>
             </Empty>
-          )}
-          
-          {document.processingStatus === 'processing' && (
-            <div style={{ textAlign: 'center', padding: '40px 0' }}>
-              <Spin size="large" />
-              <div style={{ marginTop: '16px' }}>
-                <Text type="secondary">正在处理文档内容...</Text>
-              </div>
-            </div>
-          )}
-          
-          {document.processingStatus === 'completed' && (
-            contentLoading ? (
-              <div style={{ textAlign: 'center', padding: '40px 0' }}>
-                <Spin size="large" />
-                <div style={{ marginTop: '16px' }}>
-                  <Text type="secondary">正在加载文档内容...</Text>
-                </div>
-              </div>
-            ) : (
-              <div style={{ maxWidth: '800px', margin: '0 auto' }}>
-                {renderContent(content)}
-              </div>
-            )
-          )}
-        </div>
+          </div>
+        )}
       </Card>
     </div>
   );
