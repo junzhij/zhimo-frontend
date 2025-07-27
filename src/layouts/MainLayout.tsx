@@ -115,7 +115,7 @@ const MainLayout: React.FC<MainLayoutProps> = ({
             />
           )}
           <Title level={3} style={{ margin: 0, color: '#1890ff' }}>
-            智墨学习平台
+            ThoMo学习平台
           </Title>
         </div>
 

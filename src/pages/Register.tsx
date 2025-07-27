@@ -139,7 +139,7 @@ const Register: React.FC = () => {
       >
         <div style={{ textAlign: 'center', marginBottom: 32 }}>
           <Title level={2} style={{ color: '#1890ff', marginBottom: 8 }}>
-            智墨学习平台
+            ThoMo学习平台
           </Title>
           <Text type="secondary">创建您的账户</Text>
         </div>
