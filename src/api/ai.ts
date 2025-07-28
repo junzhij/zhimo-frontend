@@ -8,27 +8,43 @@ export interface ExerciseConfig {
   language: 'zh' | 'en';
 }
 
-export interface Exercise {
-  id: string;
+// Base exercise interface with common fields
+interface BaseExercise {
+  id?: string;
   type: string;
   question: string;
-  options?: string[];
-  correctAnswer: string;
   explanation: string;
-  difficulty: number;
-  points: number;
+  difficulty?: number;
+  points?: number;
   userAnswer?: string;
   isCorrect?: boolean;
 }
 
+// Multiple choice exercise
+interface MultipleChoiceExercise extends BaseExercise {
+  type: 'multiple_choice';
+  options: string[];
+  correct_answer: string;
+}
+
+// True/false exercise
+interface TrueFalseExercise extends BaseExercise {
+  type: 'true_false';
+  correct_answer: boolean;
+}
+
+// Short answer exercise
+interface ShortAnswerExercise extends BaseExercise {
+  type: 'short_answer';
+  sample_answer: string;
+  key_points: string[];
+}
+
+// Union type for all exercise types
+export type Exercise = MultipleChoiceExercise | TrueFalseExercise | ShortAnswerExercise;
+
 export interface ExerciseResponse {
-  success: boolean;
-  data: {
-    exercises: Exercise[];
-    saved: boolean;
-    databaseId: string;
-    options: ExerciseConfig;
-  };
+  exercises: Exercise[];
 }
 
 export interface MindMapConfig {
@@ -135,7 +151,7 @@ export const aiAPI = {
     generateMindMap?: boolean;
     summaryTypes?: string[];
     exerciseCount?: number;
-  }): Promise<{ success: boolean; data: any }> => {
+  }): Promise<{ success: boolean; data: unknown }> => {
     const response = await api.post(`/documents/${documentId}/ai/process`, options);
     return response.data;
   }
