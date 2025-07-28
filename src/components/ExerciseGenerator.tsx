@@ -5,6 +5,7 @@ import {
   Form,
   Select,
   InputNumber,
+  Input,
   Radio,
   Checkbox,
   Typography,
@@ -94,7 +95,7 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
     try {
       // 调用真实API生成练习题
       const response = await aiAPI.generateExercises(selectedDocument._id, config);
-      const newExercises = response.data.exercises;
+      const newExercises = response.exercises;
       setExercises(newExercises);
       
       // 保存到localStorage
@@ -141,9 +142,24 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
   // 完成答题
   const handleFinishAnswering = () => {
     let correctCount = 0;
-    const updatedExercises = exercises.map(exercise => {
-      const userAnswer = userAnswers[exercise.id];
-      const isCorrect = userAnswer === exercise.correctAnswer;
+    const updatedExercises = exercises.map((exercise, index) => {
+      const exerciseKey = exercise.id || index.toString();
+      const userAnswer = userAnswers[exerciseKey];
+      let isCorrect = false;
+      
+      // Handle different exercise types for correct answer comparison
+      if (exercise.type === 'multiple_choice') {
+        isCorrect = userAnswer === exercise.correct_answer;
+      } else if (exercise.type === 'true_false') {
+        // Convert user answer to boolean for true/false questions
+        const userBool = userAnswer === '正确' || userAnswer === 'true';
+        isCorrect = userBool === exercise.correct_answer;
+      } else if (exercise.type === 'short_answer') {
+        // For short answer, mark as correct if user provided an answer
+        // In a real application, this would use more sophisticated scoring
+        isCorrect = !!(userAnswer && userAnswer.trim().length > 0);
+      }
+      
       if (isCorrect) correctCount++;
       
       return {
@@ -260,11 +276,11 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
                         <Text strong>题目 {index + 1}：</Text>
                         <Paragraph style={{ margin: '4px 0' }}>{exercise.question}</Paragraph>
                         <Space>
-                          <Tag color={exercise.type === 'multiple_choice' ? 'blue' : 'green'}>
-                            {exercise.type === 'multiple_choice' ? '选择题' : '判断题'}
+                          <Tag color={exercise.type === 'multiple_choice' ? 'blue' : exercise.type === 'true_false' ? 'green' : 'orange'}>
+                            {exercise.type === 'multiple_choice' ? '选择题' : exercise.type === 'true_false' ? '判断题' : '简答题'}
                           </Tag>
-                          <Tag>难度: {exercise.difficulty}/5</Tag>
-                          <Tag>分值: {exercise.points}</Tag>
+                          {exercise.difficulty && <Tag>难度: {exercise.difficulty}/5</Tag>}
+                          {exercise.points && <Tag>分值: {exercise.points}</Tag>}
                         </Space>
                       </div>
                     </div>
@@ -281,7 +297,7 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
               <Progress percent={progress} showInfo={false} />
               <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: '8px' }}>
                 <Text>题目 {currentExerciseIndex + 1} / {exercises.length}</Text>
-                <Text>分值: {currentExercise.points} 分</Text>
+                <Text>分值: {currentExercise.points || 0} 分</Text>
               </div>
             </div>
             
@@ -290,8 +306,8 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
               
               {currentExercise.type === 'multiple_choice' && (
                 <Radio.Group 
-                  value={userAnswers[currentExercise.id]}
-                  onChange={(e) => handleAnswerSubmit(currentExercise.id, e.target.value)}
+                  value={userAnswers[currentExercise.id || currentExerciseIndex.toString()]}
+                  onChange={(e) => handleAnswerSubmit(currentExercise.id || currentExerciseIndex.toString(), e.target.value)}
                   style={{ width: '100%' }}
                 >
                   <Space direction="vertical" style={{ width: '100%' }}>
@@ -306,8 +322,8 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
               
               {currentExercise.type === 'true_false' && (
                 <Radio.Group 
-                  value={userAnswers[currentExercise.id]}
-                  onChange={(e) => handleAnswerSubmit(currentExercise.id, e.target.value)}
+                  value={userAnswers[currentExercise.id || currentExerciseIndex.toString()]}
+                  onChange={(e) => handleAnswerSubmit(currentExercise.id || currentExerciseIndex.toString(), e.target.value)}
                 >
                   <Space>
                     <Radio value="正确">正确</Radio>
@@ -315,12 +331,38 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
                   </Space>
                 </Radio.Group>
               )}
+
+              {currentExercise.type === 'short_answer' && (
+                <div>
+                  <Text type="secondary" style={{ display: 'block', marginBottom: '8px' }}>
+                    参考答案: {currentExercise.sample_answer}
+                  </Text>
+                  {currentExercise.key_points && currentExercise.key_points.length > 0 && (
+                    <div style={{ marginBottom: '16px' }}>
+                      <Text type="secondary" style={{ display: 'block', marginBottom: '4px' }}>关键要点:</Text>
+                      <ul style={{ margin: 0, paddingLeft: '20px' }}>
+                        {currentExercise.key_points.map((point, index) => (
+                          <li key={index} style={{ color: '#666', fontSize: '14px' }}>{point}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  <Input.TextArea
+                    placeholder="请输入您的答案..."
+                    value={userAnswers[currentExercise.id || currentExerciseIndex.toString()]}
+                    onChange={(e) => handleAnswerSubmit(currentExercise.id || currentExerciseIndex.toString(), e.target.value)}
+                    rows={4}
+                    style={{ marginBottom: '16px' }}
+                  />
+                  <Text type="secondary">简答题将根据参考答案自动评分。</Text>
+                </div>
+              )}
               
               <div style={{ marginTop: '24px', textAlign: 'right' }}>
                 <Button 
                   type="primary"
                   onClick={handleNextExercise}
-                  disabled={!userAnswers[currentExercise.id]}
+                  disabled={!userAnswers[currentExercise.id || currentExerciseIndex.toString()]}
                 >
                   {currentExerciseIndex === exercises.length - 1 ? '完成答题' : '下一题'}
                 </Button>
@@ -391,7 +433,13 @@ const ExerciseGenerator: React.FC<ExerciseGeneratorProps> = ({ selectedDocument 
                         </div>
                         <div style={{ marginBottom: '8px' }}>
                           <Text type="secondary">正确答案：</Text>
-                          <Text style={{ color: '#52c41a' }}>{exercise.correctAnswer}</Text>
+                          <Text style={{ color: '#52c41a' }}>
+                            {exercise.type === 'true_false' 
+                              ? (exercise.correct_answer ? '正确' : '错误')
+                              : exercise.type === 'multiple_choice'
+                              ? exercise.correct_answer
+                              : exercise.sample_answer}
+                          </Text>
                         </div>
                         <Paragraph type="secondary" style={{ fontSize: '12px', margin: 0 }}>
                           {exercise.explanation}
